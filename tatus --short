@@ -1,0 +1,124 @@
+[1mdiff --git a/DEPLOYMENT-NOC.md b/DEPLOYMENT-NOC.md[m
+[1mnew file mode 100644[m
+[1mindex 00000000..31c67207[m
+[1m--- /dev/null[m
+[1m+++ b/DEPLOYMENT-NOC.md[m
+[36m@@ -0,0 +1,31 @@[m
+[32m+[m[32m# Deploy NOC Lemhannas[m
+[32m+[m
+[32m+[m[32mBuild the frontend from the same source revision that will run on the server. The[m
+[32m+[m[32mproduction build now emits several hashed JavaScript and CSS files; deploy the[m
+[32m+[m[32mentire `dist` directory, including every file under `dist/assets`, rather than[m
+[32m+[m[32mcopying only `index.html` or the main JavaScript file.[m
+[32m+[m
+[32m+[m[32m```sh[m
+[32m+[m[32mnpm ci[m
+[32m+[m[32mnpm run build[m
+[32m+[m[32mnpm start[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mBefore starting the service, verify that each `/assets/...` path referenced by[m
+[32m+[m[32m`dist/index.html` exists under `dist`. If a build fails, do not restart the[m
+[32m+[m[32mrunning service with a partial `dist` directory.[m
+[32m+[m
+[32m+[m[32mThe NOC page and Uptime Kuma dashboard are served by the same application on[m
+[32m+[m[32mport `3001`:[m
+[32m+[m
+[32m+[m[32m- `/dashboard`[m
+[32m+[m[32m- `/noc`[m
+[32m+[m
+[32m+[m[32mKeep the existing website on its current port and configuration. Only deploy[m
+[32m+[m[32mthis application to port `3001` if that port is assigned to the Uptime Kuma[m
+[32m+[m[32mservice. Do not stop or replace another application that owns the port.[m
+[32m+[m
+[32m+[m[32mAfter deployment, verify `/dashboard`, `/noc`, and the JavaScript/CSS asset URLs[m
+[32m+[m[32mreferenced by the current `dist/index.html` return successfully from port `3001`.[m
+[32m+[m[32mFor a safe update, build the complete release first, then replace the application[m
+[32m+[m[32mfiles and restart only its Uptime Kuma service.[m
+[1mdiff --git a/config/vite.config.js b/config/vite.config.js[m
+[1mindex 67cd641f..5ee51678 100644[m
+[1m--- a/config/vite.config.js[m
+[1m+++ b/config/vite.config.js[m
+[36m@@ -44,7 +44,31 @@[m [mexport default defineConfig({[m
+         },[m
+         rollupOptions: {[m
+             output: {[m
+[31m-                manualChunks(id, { getModuleInfo, getModuleIds }) {},[m
+[32m+[m[32m                manualChunks(id) {[m
+[32m+[m[32m                    const normalizedId = id.replace(/\\/g, "/");[m
+[32m+[m[32m                    if (!normalizedId.includes("/node_modules/")) {[m
+[32m+[m[32m                        return;[m
+[32m+[m[32m                    }[m
+[32m+[m
+[32m+[m[32m                    if ([m
+[32m+[m[32m                        normalizedId.includes("/node_modules/@codemirror/") ||[m
+[32m+[m[32m                        normalizedId.includes("/node_modules/codemirror/") ||[m
+[32m+[m[32m                        normalizedId.includes("/node_modules/@lezer/")[m
+[32m+[m[32m                    ) {[m
+[32m+[m[32m                        return "editor";[m
+[32m+[m[32m                    }[m
+[32m+[m
+[32m+[m[32m                    if ([m
+[32m+[m[32m                        normalizedId.includes("/node_modules/vue/") ||[m
+[32m+[m[32m                        normalizedId.includes("/node_modules/vue-router/") ||[m
+[32m+[m[32m                        normalizedId.includes("/node_modules/vue-i18n/") ||[m
+[32m+[m[32m                        normalizedId.includes("/node_modules/@vue/")[m
+[32m+[m[32m                    ) {[m
+[32m+[m[32m                        return "framework";[m
+[32m+[m[32m                    }[m
+[32m+[m
+[32m+[m[32m                    return "vendor";[m
+[32m+[m[32m                },[m
+             },[m
+         },[m
+     },[m
+[1mdiff --git a/server/server.js b/server/server.js[m
+[1mindex ba4a1c85..306a4a6a 100644[m
+[1m--- a/server/server.js[m
+[1m+++ b/server/server.js[m
+[36m@@ -95,6 +95,7 @@[m [mlog.info("server", "Loading modules");[m
+ log.debug("server", "Importing express");[m
+ const express = require("express");[m
+ const path = require("path");[m
+[32m+[m[32mconst fs = require("fs");[m
+ const expressStaticGzip = require("express-static-gzip");[m
+ log.debug("server", "Importing redbean-node");[m
+ const { R } = require("redbean-node");[m
+[36m@@ -364,6 +365,16 @@[m [mlet needSetup = false;[m
+         next();[m
+     });[m
+ [m
+[32m+[m[32m    app.use("/assets", (request, response, next) => {[m
+[32m+[m[32m        const assetsPath = path.resolve(__dirname, "../dist/assets");[m
+[32m+[m[32m        const requestedPath = path.resolve(assetsPath, request.path.slice(1));[m
+[32m+[m[32m        if (!requestedPath.startsWith(assetsPath + path.sep) || !fs.existsSync(requestedPath)) {[m
+[32m+[m[32m            response.status(404).type("text/plain").send("Asset not found.");[m
+[32m+[m[32m            return;[m
+[32m+[m[32m        }[m
+[32m+[m[32m        next();[m
+[32m+[m[32m    });[m
+[32m+[m
+     app.use([m
+         "/",[m
+         expressStaticGzip("dist", {[m
+[1mdiff --git a/src/layouts/Layout.vue b/src/layouts/Layout.vue[m
+[1mindex 1945b89e..23c8cc3e 100644[m
+[1m--- a/src/layouts/Layout.vue[m
+[1m+++ b/src/layouts/Layout.vue[m
+[36m@@ -22,16 +22,6 @@[m
+                 <span class="fs-4 title">NOC Lemhannas</span>[m
+             </router-link>[m
+ [m
+[31m-            <a[m
+[31m-                v-if="hasNewVersion"[m
+[31m-                target="_blank"[m
+[31m-                href="https://github.com/louislam/uptime-kuma/releases"[m
+[31m-                class="btn btn-primary me-3"[m
+[31m-            >[m
+[31m-                <font-awesome-icon icon="arrow-alt-circle-up" />[m
+[31m-                {{ $t("New Update") }}[m
+[31m-            </a>[m
+[31m-[m
+             <ul class="nav nav-pills">[m
+             <li v-if="$root.loggedIn" class="nav-item me-2">[m
+     <a href="/noc" class="nav-link">[m

@@ -95,6 +95,7 @@ log.info("server", "Loading modules");
 log.debug("server", "Importing express");
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const expressStaticGzip = require("express-static-gzip");
 log.debug("server", "Importing redbean-node");
 const { R } = require("redbean-node");
@@ -360,6 +361,16 @@ let needSetup = false;
             response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
             response.setHeader("Pragma", "no-cache");
             response.setHeader("Expires", "0");
+        }
+        next();
+    });
+
+    app.use("/assets", (request, response, next) => {
+        const assetsPath = path.resolve(__dirname, "../dist/assets");
+        const requestedPath = path.resolve(assetsPath, request.path.slice(1));
+        if (!requestedPath.startsWith(assetsPath + path.sep) || !fs.existsSync(requestedPath)) {
+            response.status(404).type("text/plain").send("Asset not found.");
+            return;
         }
         next();
     });

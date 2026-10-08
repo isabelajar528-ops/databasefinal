@@ -44,7 +44,31 @@ export default defineConfig({
         },
         rollupOptions: {
             output: {
-                manualChunks(id, { getModuleInfo, getModuleIds }) {},
+                manualChunks(id) {
+                    const normalizedId = id.replace(/\\/g, "/");
+                    if (!normalizedId.includes("/node_modules/")) {
+                        return;
+                    }
+
+                    if (
+                        normalizedId.includes("/node_modules/@codemirror/") ||
+                        normalizedId.includes("/node_modules/codemirror/") ||
+                        normalizedId.includes("/node_modules/@lezer/")
+                    ) {
+                        return "editor";
+                    }
+
+                    if (
+                        normalizedId.includes("/node_modules/vue/") ||
+                        normalizedId.includes("/node_modules/vue-router/") ||
+                        normalizedId.includes("/node_modules/vue-i18n/") ||
+                        normalizedId.includes("/node_modules/@vue/")
+                    ) {
+                        return "framework";
+                    }
+
+                    return "vendor";
+                },
             },
         },
     },

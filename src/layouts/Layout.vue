@@ -22,16 +22,6 @@
                 <span class="fs-4 title">NOC Lemhannas</span>
             </router-link>
 
-            <a
-                v-if="hasNewVersion"
-                target="_blank"
-                href="https://github.com/louislam/uptime-kuma/releases"
-                class="btn btn-primary me-3"
-            >
-                <font-awesome-icon icon="arrow-alt-circle-up" />
-                {{ $t("New Update") }}
-            </a>
-
             <ul class="nav nav-pills">
             <li v-if="$root.loggedIn" class="nav-item me-2">
     <a href="/noc" class="nav-link">
